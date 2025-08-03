@@ -61,10 +61,12 @@ async def fetch_url_content(url: str) -> str:
         return f"エラー: {str(e)}"
 
 # AI記事判定用エージェントを作成
-agent = Agent(
-    model="us.anthropic.claude-sonnet-4-20250514-v1:0",
-    tools=[fetch_url_content],
-    system_prompt="""
+try:
+    debug_log("エージェント作成中...")
+    agent = Agent(
+        model="us.anthropic.claude-sonnet-4-20250514-v1:0",
+        tools=[fetch_url_content],
+        system_prompt="""
 与えられたブログ記事がAI生成か否か、パーセンテージで判定してください。
 
 AI生成記事の特徴は以下です。
@@ -74,7 +76,13 @@ AI生成記事の特徴は以下です。
 - 日本人からすると不自然な表現が多い。抽象名詞による体言止め、不自然な主語（〜によって〜された、等）
 - 出典のドメイン表示がそのまま残っている
 """
-)
+    )
+    debug_log("エージェント作成完了")
+except Exception as e:
+    debug_log(f"エージェント作成エラー: {type(e).__name__}: {str(e)}")
+    import traceback
+    debug_log(f"エージェント作成スタックトレース: {traceback.format_exc()}")
+    agent = None
 
 # ページタイトルと入力欄を表示
 st.title("AI記事チェッカー")
@@ -139,9 +147,37 @@ if st.button("AI記事チェック"):
     if blog_url:
         # デバッグログをクリア
         st.session_state.debug_logs = []
+        debug_log("=== AI記事チェック開始 ===")
         
-        with st.spinner("ブログ記事を分析中…"):
-            container = st.container()
-            asyncio.run(process_stream(blog_url, container))
+        if agent is None:
+            debug_log("エラー: エージェントが初期化されていません")
+            st.error("エージェントの初期化に失敗しています。")
+            st.stop()
+        
+        try:
+            debug_log(f"入力URL: {blog_url}")
+            debug_log("process_stream関数を呼び出し中...")
+            
+            with st.spinner("ブログ記事を分析中…"):
+                container = st.container()
+                debug_log("asyncio.run実行前")
+                asyncio.run(process_stream(blog_url, container))
+                debug_log("asyncio.run実行後")
+                
+        except Exception as e:
+            debug_log(f"メイン処理でエラー: {type(e).__name__}: {str(e)}")
+            import traceback
+            debug_log(f"メインスタックトレース: {traceback.format_exc()}")
+            st.error(f"処理中にエラーが発生しました: {str(e)}")
     else:
         st.warning("URLを入力してください")
+
+# エージェント初期化確認
+st.sidebar.write("### 初期化状況")
+try:
+    st.sidebar.write(f"エージェント: {agent is not None}")
+    st.sidebar.write(f"MCPクライアント: {fetch_client is not None}")
+    debug_log(f"サイドバー: エージェント={agent is not None}, MCP={fetch_client is not None}")
+except Exception as e:
+    st.sidebar.error(f"初期化エラー: {str(e)}")
+    debug_log(f"初期化確認エラー: {str(e)}")
