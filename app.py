@@ -18,16 +18,25 @@ fetch_client = MCPClient(
     ))
 )
 
+# デバッグ用のStreamlit状態
+if 'debug_logs' not in st.session_state:
+    st.session_state.debug_logs = []
+
+def debug_log(message):
+    """デバッグメッセージをStreamlitに表示"""
+    st.session_state.debug_logs.append(message)
+    print(message)  # ターミナルにも出力
+
 # fetch機能をツールとして定義
 @tool
 async def fetch_url_content(url: str) -> str:
     """URLからコンテンツを取得する"""
-    print(f"[DEBUG] fetch_url_content呼び出し: URL={url}")
+    debug_log(f"[DEBUG] fetch_url_content呼び出し: URL={url}")
     try:
         # MCPクライアントは既にprocess_streamで起動済みなのでそのまま使用
-        print("[DEBUG] ツール一覧を取得中...")
+        debug_log("[DEBUG] ツール一覧を取得中...")
         tools = fetch_client.list_tools_sync()
-        print(f"[DEBUG] 利用可能なツール: {[t.name for t in tools]}")
+        debug_log(f"[DEBUG] 利用可能なツール: {[t.name for t in tools]}")
         
         fetch_tool = None
         for tool_info in tools:
@@ -36,19 +45,19 @@ async def fetch_url_content(url: str) -> str:
                 break
         
         if fetch_tool:
-            print(f"[DEBUG] fetchツール実行中: URL={url}")
+            debug_log(f"[DEBUG] fetchツール実行中: URL={url}")
             result = await fetch_client.call_tool_async(fetch_tool.name, {"url": url})
-            print(f"[DEBUG] 結果: {type(result)}, keys: {result.keys() if isinstance(result, dict) else 'not dict'}")
+            debug_log(f"[DEBUG] 結果: {type(result)}, keys: {result.keys() if isinstance(result, dict) else 'not dict'}")
             content = result.get("content", "コンテンツの取得に失敗しました") if isinstance(result, dict) else str(result)
-            print(f"[DEBUG] コンテンツ長: {len(content)} 文字")
+            debug_log(f"[DEBUG] コンテンツ長: {len(content)} 文字")
             return content
         else:
-            print("[DEBUG] fetchツールが見つかりません")
+            debug_log("[DEBUG] fetchツールが見つかりません")
             return "fetchツールが見つかりません"
     except Exception as e:
-        print(f"[DEBUG] 例外発生: {type(e).__name__}: {str(e)}")
+        debug_log(f"[DEBUG] 例外発生: {type(e).__name__}: {str(e)}")
         import traceback
-        print(f"[DEBUG] スタックトレース: {traceback.format_exc()}")
+        debug_log(f"[DEBUG] スタックトレース: {traceback.format_exc()}")
         return f"エラー: {str(e)}"
 
 # AI記事判定用エージェントを作成
@@ -78,25 +87,25 @@ async def process_stream(blog_url, container):
     prompt = f"""以下のURLの記事をfetch_url_contentツールで取得し、
 AI生成されたものかどうかを判定してください：{blog_url}"""
     
-    print(f"[DEBUG] process_stream開始: URL={blog_url}")
+    debug_log(f"[DEBUG] process_stream開始: URL={blog_url}")
     
     try:
         # MCPクライアントをwith句で起動してからエージェントを呼び出し
-        print("[DEBUG] fetch_clientをwith句で起動...")
+        debug_log("[DEBUG] fetch_clientをwith句で起動...")
         with fetch_client:
-            print("[DEBUG] エージェントストリーミング開始...")
+            debug_log("[DEBUG] エージェントストリーミング開始...")
             # エージェントからのストリーミングレスポンスを処理    
             async for chunk in agent.stream_async(prompt):
-                print(f"[DEBUG] chunk受信: {type(chunk)}")
+                debug_log(f"[DEBUG] chunk受信: {type(chunk)}")
                 if isinstance(chunk, dict):
                     event = chunk.get("event", {})
-                    print(f"[DEBUG] event keys: {event.keys() if event else 'no event'}")
+                    debug_log(f"[DEBUG] event keys: {event.keys() if event else 'no event'}")
 
                     # ツール実行を検出して表示
                     if "contentBlockStart" in event:
                         tool_use = event["contentBlockStart"].get("start", {}).get("toolUse", {})
                         tool_name = tool_use.get("name")
-                        print(f"[DEBUG] ツール実行開始: {tool_name}")
+                        debug_log(f"[DEBUG] ツール実行開始: {tool_name}")
                         
                         # バッファをクリア
                         if response:
@@ -111,17 +120,26 @@ AI生成されたものかどうかを判定してください：{blog_url}"""
                     if text := chunk.get("data"):
                         response += text
                         text_holder.markdown(response)
-                        print(f"[DEBUG] テキスト追加: {len(text)}文字")
+                        debug_log(f"[DEBUG] テキスト追加: {len(text)}文字")
 
     except Exception as e:
-        print(f"[DEBUG] process_stream例外: {type(e).__name__}: {str(e)}")
+        debug_log(f"[DEBUG] process_stream例外: {type(e).__name__}: {str(e)}")
         import traceback
-        print(f"[DEBUG] process_streamスタックトレース: {traceback.format_exc()}")
+        debug_log(f"[DEBUG] process_streamスタックトレース: {traceback.format_exc()}")
         container.error(f"エラーが発生しました: {str(e)}")
+
+# デバッグログを表示
+if st.session_state.debug_logs:
+    with st.expander("デバッグログ", expanded=False):
+        for log in st.session_state.debug_logs[-20:]:  # 最新20件を表示
+            st.text(log)
 
 # ボタンを押したら分析開始
 if st.button("AI記事チェック"):
     if blog_url:
+        # デバッグログをクリア
+        st.session_state.debug_logs = []
+        
         with st.spinner("ブログ記事を分析中…"):
             container = st.container()
             asyncio.run(process_stream(blog_url, container))
