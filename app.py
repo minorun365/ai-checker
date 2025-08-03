@@ -22,10 +22,15 @@ fetch_client = MCPClient(
 @tool
 async def fetch_url_content(url: str) -> str:
     """URLからコンテンツを取得する"""
+    print(f"[DEBUG] fetch_url_content呼び出し: URL={url}")
     try:
         # MCPクライアントをwith句で起動してからツールを呼び出し
+        print("[DEBUG] MCPクライアントを起動中...")
         with fetch_client:
+            print("[DEBUG] ツール一覧を取得中...")
             tools = fetch_client.list_tools_sync()
+            print(f"[DEBUG] 利用可能なツール: {[t.name for t in tools]}")
+            
             fetch_tool = None
             for tool_info in tools:
                 if tool_info.name == "fetch":
@@ -33,11 +38,19 @@ async def fetch_url_content(url: str) -> str:
                     break
             
             if fetch_tool:
+                print(f"[DEBUG] fetchツール実行中: URL={url}")
                 result = await fetch_client.call_tool_async(fetch_tool.name, {"url": url})
-                return result.get("content", "コンテンツの取得に失敗しました")
+                print(f"[DEBUG] 結果: {type(result)}, keys: {result.keys() if isinstance(result, dict) else 'not dict'}")
+                content = result.get("content", "コンテンツの取得に失敗しました") if isinstance(result, dict) else str(result)
+                print(f"[DEBUG] コンテンツ長: {len(content)} 文字")
+                return content
             else:
+                print("[DEBUG] fetchツールが見つかりません")
                 return "fetchツールが見つかりません"
     except Exception as e:
+        print(f"[DEBUG] 例外発生: {type(e).__name__}: {str(e)}")
+        import traceback
+        print(f"[DEBUG] スタックトレース: {traceback.format_exc()}")
         return f"エラー: {str(e)}"
 
 # AI記事判定用エージェントを作成
