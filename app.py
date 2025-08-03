@@ -27,54 +27,36 @@ def debug_log(message):
     st.session_state.debug_logs.append(message)
     print(message)  # ターミナルにも出力
 
-# fetch機能をツールとして定義
-@tool
-async def fetch_url_content(url: str) -> str:
-    """URLからコンテンツを取得する"""
-    debug_log(f"[DEBUG] fetch_url_content呼び出し: URL={url}")
-    try:
-        # MCPクライアントは既にprocess_streamで起動済みなのでそのまま使用
-        debug_log("[DEBUG] ツール一覧を取得中...")
-        tools = fetch_client.list_tools_sync()
-        debug_log(f"[DEBUG] 利用可能なツール: {[t.name for t in tools]}")
-        
-        fetch_tool = None
-        for tool_info in tools:
-            if tool_info.name == "fetch":
-                fetch_tool = tool_info
-                break
-        
-        if fetch_tool:
-            debug_log(f"[DEBUG] fetchツール実行中: URL={url}")
-            result = await fetch_client.call_tool_async(fetch_tool.name, {"url": url})
-            debug_log(f"[DEBUG] 結果: {type(result)}, keys: {result.keys() if isinstance(result, dict) else 'not dict'}")
-            content = result.get("content", "コンテンツの取得に失敗しました") if isinstance(result, dict) else str(result)
-            debug_log(f"[DEBUG] コンテンツ長: {len(content)} 文字")
-            return content
-        else:
-            debug_log("[DEBUG] fetchツールが見つかりません")
-            return "fetchツールが見つかりません"
-    except Exception as e:
-        debug_log(f"[DEBUG] 例外発生: {type(e).__name__}: {str(e)}")
-        import traceback
-        debug_log(f"[DEBUG] スタックトレース: {traceback.format_exc()}")
-        return f"エラー: {str(e)}"
-
 # AI記事判定用エージェントを作成
 try:
     debug_log("エージェント作成中...")
+    debug_log("MCPクライアントからツールを取得中...")
+    
+    # MCPクライアントを起動してツールを取得
+    with fetch_client:
+        mcp_tools = fetch_client.list_tools_sync()
+        debug_log(f"MCPツール一覧: {[t.name for t in mcp_tools]}")
+    
+    # MCPツールを直接エージェントに渡す
     agent = Agent(
         model="us.anthropic.claude-sonnet-4-20250514-v1:0",
-        tools=[fetch_url_content],
+        tools=mcp_tools,
         system_prompt="""
 与えられたブログ記事がAI生成か否か、パーセンテージで判定してください。
 
-AI生成記事の特徴は以下です。
+fetchツールを使ってURLからコンテンツを取得し、以下の特徴からAI生成記事かどうかを判定してください：
+
+AI生成記事の特徴:
 - タイトルや見出しに半角コロンが含まれている
 - 箇条書きを多用する
 - 箇条書きの冒頭がマークダウン太字で、半角コロンが使われている
 - 日本人からすると不自然な表現が多い。抽象名詞による体言止め、不自然な主語（〜によって〜された、等）
 - 出典のドメイン表示がそのまま残っている
+
+判定結果は以下の形式で回答してください：
+- AI生成の可能性: 高い/中程度/低い
+- 根拠: 具体的な理由を3つ挙げる
+- 信頼度: パーセンテージで表示
 """
     )
     debug_log("エージェント作成完了")
@@ -92,8 +74,7 @@ blog_url = st.text_input("チェックしたいブログ記事のURLを入力し
 async def process_stream(blog_url, container):
     text_holder = container.empty()
     response = ""
-    prompt = f"""以下のURLの記事をfetch_url_contentツールで取得し、
-AI生成されたものかどうかを判定してください：{blog_url}"""
+    prompt = f"""fetchツールを使って以下のURLからコンテンツを取得し、AI生成記事かどうかを判定してください：{blog_url}"""
     
     debug_log(f"[DEBUG] process_stream開始: URL={blog_url}")
     
