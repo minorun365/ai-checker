@@ -1,3 +1,4 @@
 streamlit
 strands-agents
 mcp[cli]
+uv
