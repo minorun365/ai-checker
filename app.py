@@ -58,13 +58,14 @@ AI生成記事の特徴は以下です。
 
 # ページタイトルと入力欄を表示
 st.title("AI記事チェッカー")
-blog_url = st.text_input("チェックしたいブログ記事のURLを入力してください：")
+blog_url = st.text_input("チェックしたいブログ記事のURLを入力してください")
 
 # 非同期ストリーミング処理
 async def process_stream(blog_url, container):
     text_holder = container.empty()
     response = ""
-    prompt = f"以下のURLの記事をfetch_url_contentツールで取得し、AI生成されたものかどうかを判定してください：{blog_url}"
+    prompt = f"""以下のURLの記事をfetch_url_contentツールで取得し、
+AI生成されたものかどうかを判定してください：{blog_url}"""
     
     try:
         # MCPクライアントをwith句で起動してからエージェントを呼び出し
@@ -92,13 +93,14 @@ async def process_stream(blog_url, container):
                     if text := chunk.get("data"):
                         response += text
                         text_holder.markdown(response)
+
     except Exception as e:
         container.error(f"エラーが発生しました: {str(e)}")
 
 # ボタンを押したら分析開始
 if st.button("AI記事チェック"):
     if blog_url:
-        with st.spinner("ブログ記事を分析中..."):
+        with st.spinner("ブログ記事を分析中…"):
             container = st.container()
             asyncio.run(process_stream(blog_url, container))
     else:
