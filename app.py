@@ -80,18 +80,25 @@ async def process_stream(blog_url, container):
     prompt = f"""以下のURLの記事をfetch_url_contentツールで取得し、
 AI生成されたものかどうかを判定してください：{blog_url}"""
     
+    print(f"[DEBUG] process_stream開始: URL={blog_url}")
+    
     try:
         # MCPクライアントをwith句で起動してからエージェントを呼び出し
+        print("[DEBUG] fetch_clientをwith句で起動...")
         with fetch_client:
+            print("[DEBUG] エージェントストリーミング開始...")
             # エージェントからのストリーミングレスポンスを処理    
             async for chunk in agent.stream_async(prompt):
+                print(f"[DEBUG] chunk受信: {type(chunk)}")
                 if isinstance(chunk, dict):
                     event = chunk.get("event", {})
+                    print(f"[DEBUG] event keys: {event.keys() if event else 'no event'}")
 
                     # ツール実行を検出して表示
                     if "contentBlockStart" in event:
                         tool_use = event["contentBlockStart"].get("start", {}).get("toolUse", {})
                         tool_name = tool_use.get("name")
+                        print(f"[DEBUG] ツール実行開始: {tool_name}")
                         
                         # バッファをクリア
                         if response:
@@ -106,8 +113,12 @@ AI生成されたものかどうかを判定してください：{blog_url}"""
                     if text := chunk.get("data"):
                         response += text
                         text_holder.markdown(response)
+                        print(f"[DEBUG] テキスト追加: {len(text)}文字")
 
     except Exception as e:
+        print(f"[DEBUG] process_stream例外: {type(e).__name__}: {str(e)}")
+        import traceback
+        print(f"[DEBUG] process_streamスタックトレース: {traceback.format_exc()}")
         container.error(f"エラーが発生しました: {str(e)}")
 
 # ボタンを押したら分析開始
