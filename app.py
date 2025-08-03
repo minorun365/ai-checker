@@ -36,14 +36,7 @@ try:
     with fetch_client:
         mcp_tools = fetch_client.list_tools_sync()
         debug_log(f"MCPツール数: {len(mcp_tools)}")
-        
-        # ツールの属性を調べる
-        for i, tool in enumerate(mcp_tools):
-            debug_log(f"ツール{i}: type={type(tool)}, dir={dir(tool)}")
-            # 一般的な属性名を試す
-            for attr in ['name', 'tool_name', 'function_name', '_name']:
-                if hasattr(tool, attr):
-                    debug_log(f"  {attr}: {getattr(tool, attr)}")
+        debug_log(f"MCPツール一覧: {[t.tool_name for t in mcp_tools]}")
     
     # MCPツールを直接エージェントに渡す
     agent = Agent(
